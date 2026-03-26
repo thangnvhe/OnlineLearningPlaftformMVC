@@ -150,8 +150,3 @@ Use `Moq` for mocking and `Microsoft.NET.Test.Sdk` test runner already reference
 - Add authors/maintainers and contact info here.
 
 ---
-
-If you want, I can next:
-- add a `CONTRIBUTING.md` template,
-- create a `docker-compose.yml` for local SQL Server and the app,
-- or open a commit/PR with these README changes.
