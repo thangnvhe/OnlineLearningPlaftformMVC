@@ -1,0 +1,425 @@
+@using OnlineLearning.Models.ViewModels
+@model QuestionViewModel
+@{
+    ViewData["Title"] = "Làm bài Quiz";
+    Layout = "~/Views/Shared/_Layout_Copy.cshtml";
+}
+
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Tiêu đề và thông tin Quiz -->
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">@Model.Quiz.QuizName</h4>
+                        <div>
+                            <div id="timer" class="badge bg-primary p-2 fs-5"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>Time:</strong> <span id="quiz-time" data-seconds="@Model.Quiz.QuizTime">@(Model.Quiz.QuizTime >= 60 ? (Model.Quiz.QuizTime / 60) + " minute" : Model.Quiz.QuizTime + " second")</span></p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Total questions::</strong> @Model.Questions.Count</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button id="submit-quiz" class="btn btn-success">Submit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Danh sách câu hỏi bên trái -->
+        <div class="col-md-3">
+            <div class="card mb-4 shadow-sm border-0">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">List of questions</h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush question-list">
+                        @for (int questionNumber = 1; questionNumber <= Model.Questions.Count; questionNumber++)
+                        {
+                            var question = Model.Questions[questionNumber - 1];
+                            <li id="question-nav-@question.QuestionId" class="list-group-item question-nav-item"
+                                data-question-id="@question.QuestionId" data-question-num="@questionNumber">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Question @questionNumber</span>
+                                    <span class="question-status" id="status-@question.QuestionId">
+                                        <i class="fas fa-circle text-muted"></i>
+                                    </span>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Nội dung câu hỏi bên phải -->
+        <div class="col-md-9">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <div id="questions-container">
+                        @for (int qNumber = 1; qNumber <= Model.Questions.Count; qNumber++)
+                        {
+                            var question = Model.Questions[qNumber - 1];
+                            <div id="question-@question.QuestionId" class="question-container" style="display: none;">
+                                <h4 class="mb-4">Question @qNumber: @question.QuestionName</h4>
+                                <div class="options-container">
+                                    <div class="form-group">
+                                        @if (question.Options != null && question.Options.Any())
+                                        {
+                                            @foreach (var option in question.Options)
+                                            {
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input option-checkbox"
+                                                           type="checkbox"
+                                                           name="question-@question.QuestionId"
+                                                           id="option-@option.OptionId"
+                                                           value="@option.OptionId"
+                                                           data-question-id="@question.QuestionId">
+                                                    <label class="form-check-label" for="option-@option.OptionId">
+                                                        @option.OptionText
+                                                    </label>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <p class="text-danger">There is no answer to this question.</p>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 d-flex justify-content-between">
+                                    @if (qNumber > 1)
+                                    {
+                                        <button class="btn btn-outline-primary prev-question"
+                                                data-current="@question.QuestionId"
+                                                data-prev="@Model.Questions[qNumber - 2].QuestionId">
+                                            <i class="fas fa-arrow-left"></i> Previous sentence
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <div></div>
+                                    }
+
+                                    @if (qNumber < Model.Questions.Count)
+                                    {
+                                        <button class="btn btn-outline-primary next-question"
+                                                data-current="@question.QuestionId"
+                                                data-next="@Model.Questions[qNumber].QuestionId">
+                                            Next Sentence <i class="fas fa-arrow-right"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button id="finish-button" class="btn btn-success">
+                                            Submit <i class="fas fa-check"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Form ẩn để submit câu trả lời -->
+<form id="quiz-form" method="post" action="@Url.Action("SubmitQuiz", "UserAnswers", new { area = "Mentee" })" style="display: none;">
+    <input type="hidden" name="QuizId" value="@Model.Quiz.QuizId" />
+    <input type="hidden" name="CourseId" value="@Model.CourseId" />
+    <input type="hidden" name="ModuleId" value="@ViewBag.ModuleId" />
+    <div id="user-answers-container">
+        <!-- Sẽ được thêm động bằng JavaScript -->
+    </div>
+</form>
+
+<!-- Modal xác nhận nộp bài -->
+<div class="modal fade" id="submitConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">Confirm submission</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to submit this quiz?</p>
+                <p id="unanswered-warning" class="text-danger"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirm-submit">Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal hiển thị kết quả tạm thởi -->
+<div class="modal fade" id="previewResultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Preview your results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="user-answer-preview" class="container-fluid">
+                    <h4 class="mb-3">Assignment information</h4>
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Question</th>
+                                <th>Selected Answer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-answer-table">
+                            <!-- Dữ liệu sẽ được thêm dynamically bằng JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="continue-submit">Continue submitting</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Hiển thị câu hỏi đầu tiên khi trang tải
+            var firstQuestionId = $('.question-nav-item').first().data('question-id');
+            $('#question-' + firstQuestionId).show();
+            $('#question-nav-' + firstQuestionId).addClass('active');
+
+            // Bắt sự kiện khi người dùng chọn câu hỏi từ danh sách bên trái
+            $('.question-nav-item').click(function () {
+                var questionId = $(this).data('question-id');
+                switchQuestion(questionId);
+            });
+
+            // Xử lý nút "Câu tiếp theo"
+            $('.next-question').click(function () {
+                var nextQuestionId = $(this).data('next');
+                switchQuestion(nextQuestionId);
+            });
+
+            // Xử lý nút "Câu trước"
+            $('.prev-question').click(function () {
+                var prevQuestionId = $(this).data('prev');
+                switchQuestion(prevQuestionId);
+            });
+
+            // Chuyển đổi giữa các câu hỏi
+            function switchQuestion(questionId) {
+                $('.question-container').hide();
+                $('.question-nav-item').removeClass('active');
+                $('#question-' + questionId).show();
+                $('#question-nav-' + questionId).addClass('active');
+            }
+
+            // Cập nhật trạng thái khi người dùng chọn đáp án
+            $('.option-checkbox').change(function () {
+                var questionId = $(this).data('question-id');
+                
+                // Bỏ đoạn code này để cho phép chọn nhiều đáp án
+                // Đảm bảo chỉ chọn một đáp án cho mỗi câu hỏi
+                // var name = $(this).attr('name');
+                // if ($(this).prop('checked')) {
+                //     $('input[name="' + name + '"]').not(this).prop('checked', false);
+                // }
+                
+                updateQuestionStatus(questionId);
+            });
+
+            // Cập nhật trạng thái câu hỏi (đã trả lời hay chưa)
+            function updateQuestionStatus(questionId) {
+                var answered = $('input[name="question-' + questionId + '"]:checked').length > 0;
+                var statusIcon = $('#status-' + questionId + ' i');
+                
+                if (answered) {
+                    statusIcon.removeClass('text-muted').addClass('text-success');
+                } else {
+                    statusIcon.removeClass('text-success').addClass('text-muted');
+                }
+            }
+
+            // Hiển thị hộp thoại xác nhận khi nhấn nút "Nộp bài"
+            $('#submit-quiz, #finish-button').click(function (e) {
+                e.preventDefault();
+                
+                // Đếm số câu hỏi chưa trả lời
+                var totalQuestions = $('.question-nav-item').length;
+                var answeredQuestions = $('.question-status i.text-success').length;
+                var unansweredCount = totalQuestions - answeredQuestions;
+                
+                // Hiển thị cảnh báo trong modal
+                if (unansweredCount > 0) {
+                    $('#unanswered-warning').text('You have ' + unansweredCount + ' unanswered questions.');
+                } else {
+                    $('#unanswered-warning').text('');
+                }
+                
+                // Hiển thị modal xác nhận
+                $('#submitConfirmModal').modal('show');
+            });
+
+            // Xử lý khi người dùng xác nhận nộp bài
+            $('#confirm-submit').click(function () {
+                // Đóng modal xác nhận
+                $('#submitConfirmModal').modal('hide');
+                
+                // Thu thập câu trả lời và hiển thị trước khi submit
+                previewAnswers();
+            });
+            
+            // Nút tiếp tục nộp bài sau khi xem trước
+            $('#continue-submit').click(function() {
+                $('#previewResultModal').modal('hide');
+                submitQuiz();
+            });
+
+            // Hàm hiển thị xem trước đáp án đã chọn
+            function previewAnswers() {
+                // Xóa nội dung bảng cũ
+                $('#preview-answer-table').empty();
+                
+                // Tạo một đối tượng để lưu trữ các đáp án đã chọn theo questionId
+                var answersMap = {};
+                
+                // Thu thập tất cả câu trả lời đã chọn và nhóm chúng theo questionId
+                $('.option-checkbox:checked').each(function() {
+                    var questionId = $(this).data('question-id');
+                    var optionId = $(this).val();
+                    var questionText = $('#question-' + questionId + ' h4').text();
+                    var optionText = $('label[for="option-' + optionId + '"]').text().trim();
+                    
+                    // Kiểm tra xem câu hỏi đã tồn tại trong map chưa
+                    if (!answersMap[questionId]) {
+                        answersMap[questionId] = {
+                            questionId: questionId,
+                            questionText: questionText,
+                            options: []
+                        };
+                    }
+                    
+                    // Thêm đáp án vào câu hỏi
+                    answersMap[questionId].options.push({
+                        optionId: optionId,
+                        optionText: optionText
+                    });
+                });
+                
+                // Hiển thị các câu hỏi và đáp án đã nhóm
+                for (var questionId in answersMap) {
+                    var question = answersMap[questionId];
+                    var row = $('<tr>');
+                    
+                    // Thêm cột câu hỏi
+                    row.append($('<td>').text(question.questionText));
+                    
+                    // Tạo chuỗi đáp án được nối bằng dấu phẩy
+                    var optionsText = '';
+                    for (var i = 0; i < question.options.length; i++) {
+                        optionsText += question.options[i].optionText;
+                        if (i < question.options.length - 1) {
+                            optionsText += ', ';
+                        }
+                    }
+                    
+                    // Thêm cột đáp án
+                    row.append($('<td>').text(optionsText));
+                    
+                    // Thêm dòng vào bảng
+                    $('#preview-answer-table').append(row);
+                }
+                
+                // Hiển thị modal xem trước kết quả
+                $('#previewResultModal').modal('show');
+            }
+
+            // Hàm gửi câu trả lời
+            function submitQuiz() {
+                // Xóa các input đáp án hiện tại
+                $('#user-answers-container').empty();
+                
+                // Thu thập tất cả câu trả lời đã chọn
+                $('.option-checkbox:checked').each(function (index) {
+                    var questionId = $(this).data('question-id');
+                    var optionId = $(this).val();
+                    
+                    // Tạo input hidden cho câu trả lời
+                    var questionInput = $('<input>').attr({
+                        type: 'hidden',
+                        name: 'UserAnswers[' + index + '].QuestionId',
+                        value: questionId
+                    });
+                    
+                    var optionInput = $('<input>').attr({
+                        type: 'hidden',
+                        name: 'UserAnswers[' + index + '].SelectedOptionId',
+                        value: optionId
+                    });
+                    
+                    // Thêm vào form
+                    $('#user-answers-container').append(questionInput).append(optionInput);
+                });
+                
+                // Submit form
+                $('#quiz-form').submit();
+            }
+
+            // Thiết lập bộ đếm thởi gian
+            setupTimer();
+
+            function setupTimer() {
+                var quizTimeSeconds = parseInt($('#quiz-time').data('seconds'));
+                var timerElement = $('#timer');
+                var timeLeft = quizTimeSeconds;
+
+                // Cập nhật và hiển thị thởi gian
+                function updateTimer() {
+                    var minutes = Math.floor(timeLeft / 60);
+                    var seconds = timeLeft % 60;
+                    var formattedTime = 
+                        (minutes < 10 ? '0' + minutes : minutes) + ':' + 
+                        (seconds < 10 ? '0' + seconds : seconds);
+                    
+                    timerElement.text(formattedTime);
+                    
+                    // Cảnh báo khi gần hết thởi gian
+                    if (timeLeft <= 60) {
+                        timerElement.removeClass('bg-primary').addClass('bg-danger');
+                    }
+                    
+                    // Hết thởi gian tự động nộp bài
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        submitQuiz();
+                    }
+                    
+                    timeLeft--;
+                }
+
+                // Khởi tạo timer
+                updateTimer();
+                var timerInterval = setInterval(updateTimer, 1000);
+            }
+        });
+    </script>
+}
